@@ -1,84 +1,98 @@
-// Package main is a module with a built-in "counter" component model, that will simply track numbers.
-// It uses the rdk:component:generic interface for simplicity.
 package main
 
 import (
 	"context"
-	"fmt"
-	"sync/atomic"
+	"sync"
+	"time"
 
-	"github.com/pkg/errors"
-
-	"go.viam.com/rdk/components/generic"
+	"go.viam.com/rdk/components/servo"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/module"
 	"go.viam.com/rdk/resource"
 )
 
-var myModel = resource.NewModel("acme", "demo", "mycounter")
+var myModel = resource.NewModel("acme", "demo", "myservo")
 
 func main() {
-	// We first put our component's constructor in the registry, then tell the module to load it
-	// Note that all resources must be added before the module is started.
-	resource.RegisterComponent(generic.API, myModel, resource.Registration[resource.Resource, resource.NoNativeConfig]{
-		Constructor: newCounter,
+	resource.RegisterComponent(servo.API, myModel, resource.Registration[servo.Servo, *myServoConfig]{
+		Constructor: newServo,
 	})
 
-	// Next, we run a module which will have a singl model.
-	module.ModularMain(resource.APIModel{generic.API, myModel})
+	module.ModularMain(resource.APIModel{servo.API, myModel})
 }
 
-// newCounter is used to create a new instance of our specific model. It is called for each component in the robot's config with this model.
-func newCounter(ctx context.Context,
+func newServo(ctx context.Context,
 	deps resource.Dependencies,
 	conf resource.Config,
 	logger logging.Logger,
-) (resource.Resource, error) {
-	return &counter{
-		Named: conf.ResourceName().AsNamed(),
+) (servo.Servo, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	msc, err := resource.NativeConfig[*myServoConfig](conf)
+	if err != nil {
+		return nil, err
+	}
+
+	s, err := deps.Lookup(servo.Named(msc.RDKServo))
+	if err != nil {
+		return nil, err
+	}
+
+	wg.Go(func() {
+		// Wait for 5s before starting a Move call to let all other operations drain out of
+		// the manager (and avoid other logic holding onto operation references and stopping
+		// GC).
+		time.Sleep(5 * time.Second)
+
+		// I use println to avoid putting Log operations in the manager for module -> RDK
+		// requests.
+		println("BENJI Beginning Move call from module (pay attention now)")
+		if err := s.(servo.Servo).Move(ctx, 1, nil); err != nil {
+			println("BENJI", err.Error())
+		}
+	})
+
+	return &myServo{
+		Named:  conf.ResourceName().AsNamed(),
+		cancel: cancel,
+		wg:     &wg,
 	}, nil
 }
 
-// counter is the representation of this model. It holds only a "total" count.
-type counter struct {
-	resource.Named
-	resource.TriviallyCloseable
-	total int64
+type myServoConfig struct {
+	RDKServo string `json:"rdk_servo"`
 }
 
-func (c *counter) Reconfigure(ctx context.Context, deps resource.Dependencies, conf resource.Config) error {
-	atomic.StoreInt64(&c.total, 0)
+func (msc *myServoConfig) Validate(_ string) ([]string, []string, error) {
+	return nil, []string{msc.RDKServo}, nil
+}
+
+// myServo is the representation of this model.
+type myServo struct {
+	resource.Named
+	resource.TriviallyReconfigurable
+	wg     *sync.WaitGroup
+	cancel context.CancelFunc
+}
+
+func (ms *myServo) Move(ctx context.Context, angleDeg uint32, extra map[string]interface{}) error {
 	return nil
 }
 
-// DoCommand is the only method of this component. It looks up the "real" command from the map it's passed.
-// Because of this, any arbitrary commands can be received, and any data returned.
-func (c *counter) DoCommand(ctx context.Context, req map[string]interface{}) (map[string]interface{}, error) {
-	// We look for a map key called "command"
-	cmd, ok := req["command"]
-	if !ok {
-		return nil, errors.New("missing 'command' string")
-	}
+func (ms *myServo) Position(ctx context.Context, extra map[string]interface{}) (uint32, error) {
+	return 0, nil
+}
 
-	// If it's "get" we return the current total.
-	if cmd == "get" {
-		return map[string]interface{}{"total": atomic.LoadInt64(&c.total)}, nil
-	}
+func (ms *myServo) IsMoving(context.Context) (bool, error) {
+	return false, nil
+}
 
-	// If it's "add" we atomically add a second key "value" to the total.
-	if cmd == "add" {
-		_, ok := req["value"]
-		if !ok {
-			return nil, errors.New("value must exist")
-		}
-		val, ok := req["value"].(float64)
-		if !ok {
-			return nil, errors.New("value must be a number")
-		}
-		atomic.AddInt64(&c.total, int64(val))
-		// We return the new total after the addition.
-		return map[string]interface{}{"total": atomic.LoadInt64(&c.total)}, nil
-	}
-	// The command must've been something else.
-	return nil, fmt.Errorf("unknown command string %s", cmd)
+func (ms *myServo) Stop(context.Context, map[string]interface{}) error {
+	return nil
+}
+
+func (ms *myServo) Close(ctx context.Context) error {
+	ms.cancel()
+	ms.wg.Wait()
+	return nil
 }

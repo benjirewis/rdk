@@ -3,6 +3,7 @@ package operation
 
 import (
 	"context"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -43,6 +44,30 @@ func (o *Operation) Cancel() {
 
 // HasLabel returns true if this operation has a specific label.
 func (o *Operation) HasLabel(label string) bool {
+	// HasLabel should be called when a Move operation is trying to check if other
+	// operations are trying to actuate the same component. I saw in Steve's logs that o was
+	// non-nil at the beginning of the method, but o.labels _still_ caused an NPE on L71
+	// below. My theory of the interleaving that caused that is:
+	//
+	// 1. Move 1 comes in and begins
+	// 2. Operation 1 is created and added to the ops map
+	// 3. Move 2 comes in and begins
+	// 4. HasLabel on Operation 1 is called to see if it's trying to move the same thing as
+	//    Move 2.
+	// 5. Move 1 finishes
+	// 6. Operation 1 is removed from the ops map
+	// 7. Operation 1 is left w/o references (the receiver pointer of HasLabel does not
+	//    count), and garbage-collection is run
+	// 8. Accessing the labels field of Operation 1 in HasLabel causes an NPE
+	//
+	// The sleep on L71 before and the one in fake/servo.go#Move() are meant to create that
+	// interleaving.
+
+	method := o.Method
+	id := o.ID.String()
+	o.myManager.logger.Infow("BENJI HasLabel is running; sleeping for 2 seconds", "method", method, "id", id)
+	time.Sleep(2 * time.Second)
+	o.myManager.logger.Infow("BENJI HasLabel continuing to o.labels (potential NPE)", "method", method, "id", id)
 	for _, l := range o.labels {
 		if l == label {
 			return true
@@ -86,12 +111,21 @@ type Manager struct {
 func (m *Manager) remove(id uuid.UUID) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+
+	op := m.ops[id.String()]
+	m.logger.Infow("BENJI deleting an operation from the map", "method", op.Method, "id", id.String())
+
 	delete(m.ops, id.String())
+
+	// Force a GC run with the idea that the delete above may cause the deleted operation to
+	// be without references and be garbage-collected (set to nil).
+	runtime.GC()
 }
 
 func (m *Manager) add(op *Operation) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+	m.logger.Infow("BENJI adding an operation to the map", "method", op.Method, "id", op.ID.String())
 	m.ops[op.ID.String()] = op
 }
 
