@@ -516,6 +516,8 @@ func newWithResources(
 		return nil, err
 	}
 
+	r.logger.Info("Diagnostic message")
+
 	if err := r.webSvc.StartModule(ctx); err != nil {
 		return nil, err
 	}
@@ -1333,6 +1335,8 @@ func (r *localRobot) applyLocalModuleVersions(cfg *config.Config) {
 }
 
 func (r *localRobot) reconfigure(ctx context.Context, newConfig *config.Config, forceSync bool) {
+	r.logger.NonDiagnostic("BENJI WOW a NON-DIAGNOSTIC log!")
+
 	defer func() {
 		// Always update the `initializing` value at the end of this function. Resources may
 		// be equal or `reconfigure` may otherwise return early, but we still want to move

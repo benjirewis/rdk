@@ -12,6 +12,7 @@ import (
 // Logger interface for logging to.
 type Logger interface {
 	ZapCompatibleLogger
+	NonDiagnosticLogger
 
 	SetLevel(level Level)
 	GetLevel() Level
@@ -38,6 +39,19 @@ type Logger interface {
 	CError(ctx context.Context, args ...interface{})
 	CErrorf(ctx context.Context, template string, args ...interface{})
 	CErrorw(ctx context.Context, msg string, keysAndValues ...interface{})
+}
+
+// NonDiagnosticLogger is an interface with non-diagnostic-logging methods. All methods
+// are Info-level. There are no Debug, Warn, Error, or Fatal non-diagnostic-logging
+// methods. Debug-level logs are always diagnostic. Warn-level or higher logs are always
+// non-diagnostic.
+type NonDiagnosticLogger interface {
+	NonDiagnostic(args ...interface{})
+	NonDiagnosticf(template string, args ...interface{})
+	NonDiagnosticw(msg string, keysAndValues ...interface{})
+	CNonDiagnostic(ctx context.Context, args ...interface{})
+	CNonDiagnosticf(ctx context.Context, template string, args ...interface{})
+	CNonDiagnosticw(ctx context.Context, msg string, keysAndValues ...interface{})
 }
 
 // ZapCompatibleLogger is a backwards compatibility layer for existing usages of the RDK as a
@@ -150,6 +164,30 @@ func (logger zLogger) CInfof(ctx context.Context, template string, args ...inter
 }
 
 func (logger zLogger) CInfow(ctx context.Context, msg string, keysAndValues ...interface{}) {
+	logger.Infow(msg, keysAndValues...)
+}
+
+func (logger zLogger) NonDiagnostic(args ...interface{}) {
+	logger.Info(args...)
+}
+
+func (logger zLogger) NonDiagnosticf(template string, args ...interface{}) {
+	logger.Infof(template, args...)
+}
+
+func (logger zLogger) NonDiagnosticw(msg string, keysAndValues ...interface{}) {
+	logger.Infow(msg, keysAndValues...)
+}
+
+func (logger zLogger) CNonDiagnostic(ctx context.Context, args ...interface{}) {
+	logger.Info(args...)
+}
+
+func (logger zLogger) CNonDiagnosticf(ctx context.Context, template string, args ...interface{}) {
+	logger.Infof(template, args...)
+}
+
+func (logger zLogger) CNonDiagnosticw(ctx context.Context, msg string, keysAndValues ...interface{}) {
 	logger.Infow(msg, keysAndValues...)
 }
 
