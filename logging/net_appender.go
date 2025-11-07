@@ -221,15 +221,15 @@ func (nl *NetAppender) Write(e zapcore.Entry, f []zapcore.Field) error {
 	return nl.write(e, f, false)
 }
 
-func (nl *NetAppender) write(e zapcore.Entry, f []zapcore.Field, nonDiagnostic bool) error {
+func (nl *NetAppender) write(e zapcore.Entry, f []zapcore.Field, userFacing bool) error {
 	log := &commonpb.LogEntry{
-		Host:          nl.hostname,
-		Level:         e.Level.String(),
-		Time:          timestamppb.New(e.Time),
-		LoggerName:    e.LoggerName,
-		Message:       e.Message,
-		Stack:         e.Stack,
-		NonDiagnostic: nonDiagnostic,
+		Host:       nl.hostname,
+		Level:      e.Level.String(),
+		Time:       timestamppb.New(e.Time),
+		LoggerName: e.LoggerName,
+		Message:    e.Message,
+		Stack:      e.Stack,
+		UserFacing: userFacing,
 	}
 
 	wc := wrappedEntryCaller{

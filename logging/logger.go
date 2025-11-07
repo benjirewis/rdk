@@ -12,7 +12,7 @@ import (
 // Logger interface for logging to.
 type Logger interface {
 	ZapCompatibleLogger
-	NonDiagnosticLogger
+	UserLogger
 
 	SetLevel(level Level)
 	GetLevel() Level
@@ -41,17 +41,23 @@ type Logger interface {
 	CErrorw(ctx context.Context, msg string, keysAndValues ...interface{})
 }
 
-// NonDiagnosticLogger is an interface with non-diagnostic-logging methods. All methods
-// are Info-level. There are no Debug, Warn, Error, or Fatal non-diagnostic-logging
-// methods. Debug-level logs are always diagnostic. Warn-level or higher logs are always
-// non-diagnostic.
-type NonDiagnosticLogger interface {
-	NonDiagnostic(args ...interface{})
-	NonDiagnosticf(template string, args ...interface{})
-	NonDiagnosticw(msg string, keysAndValues ...interface{})
-	CNonDiagnostic(ctx context.Context, args ...interface{})
-	CNonDiagnosticf(ctx context.Context, template string, args ...interface{})
-	CNonDiagnosticw(ctx context.Context, msg string, keysAndValues ...interface{})
+// UserLogger is an interface with user-facing-logging methods. There are no Debug, Error,
+// or Fatal user-facing-logging methods. Debug-level logs are always diagnostic.
+// Error-level or higher logs are always user-facing.
+type UserLogger interface {
+	UserInfo(args ...interface{})
+	UserInfof(template string, args ...interface{})
+	UserInfow(msg string, keysAndValues ...interface{})
+	CUserInfo(ctx context.Context, args ...interface{})
+	CUserInfof(ctx context.Context, template string, args ...interface{})
+	CUserInfow(ctx context.Context, msg string, keysAndValues ...interface{})
+
+	UserWarn(args ...interface{})
+	UserWarnf(template string, args ...interface{})
+	UserWarnw(msg string, keysAndValues ...interface{})
+	CUserWarn(ctx context.Context, args ...interface{})
+	CUserWarnf(ctx context.Context, template string, args ...interface{})
+	CUserWarnw(ctx context.Context, msg string, keysAndValues ...interface{})
 }
 
 // ZapCompatibleLogger is a backwards compatibility layer for existing usages of the RDK as a
@@ -167,27 +173,27 @@ func (logger zLogger) CInfow(ctx context.Context, msg string, keysAndValues ...i
 	logger.Infow(msg, keysAndValues...)
 }
 
-func (logger zLogger) NonDiagnostic(args ...interface{}) {
+func (logger zLogger) UserInfo(args ...interface{}) {
 	logger.Info(args...)
 }
 
-func (logger zLogger) NonDiagnosticf(template string, args ...interface{}) {
+func (logger zLogger) UserInfof(template string, args ...interface{}) {
 	logger.Infof(template, args...)
 }
 
-func (logger zLogger) NonDiagnosticw(msg string, keysAndValues ...interface{}) {
+func (logger zLogger) UserInfow(msg string, keysAndValues ...interface{}) {
 	logger.Infow(msg, keysAndValues...)
 }
 
-func (logger zLogger) CNonDiagnostic(ctx context.Context, args ...interface{}) {
+func (logger zLogger) CUserInfo(ctx context.Context, args ...interface{}) {
 	logger.Info(args...)
 }
 
-func (logger zLogger) CNonDiagnosticf(ctx context.Context, template string, args ...interface{}) {
+func (logger zLogger) CUserInfof(ctx context.Context, template string, args ...interface{}) {
 	logger.Infof(template, args...)
 }
 
-func (logger zLogger) CNonDiagnosticw(ctx context.Context, msg string, keysAndValues ...interface{}) {
+func (logger zLogger) CUserInfow(ctx context.Context, msg string, keysAndValues ...interface{}) {
 	logger.Infow(msg, keysAndValues...)
 }
 
@@ -200,6 +206,30 @@ func (logger zLogger) CWarnf(ctx context.Context, template string, args ...inter
 }
 
 func (logger zLogger) CWarnw(ctx context.Context, msg string, keysAndValues ...interface{}) {
+	logger.Warnw(msg, keysAndValues...)
+}
+
+func (logger zLogger) UserWarn(args ...interface{}) {
+	logger.Warn(args...)
+}
+
+func (logger zLogger) UserWarnf(template string, args ...interface{}) {
+	logger.Warnf(template, args...)
+}
+
+func (logger zLogger) UserWarnw(msg string, keysAndValues ...interface{}) {
+	logger.Warnw(msg, keysAndValues...)
+}
+
+func (logger zLogger) CUserWarn(ctx context.Context, args ...interface{}) {
+	logger.Warn(args...)
+}
+
+func (logger zLogger) CUserWarnf(ctx context.Context, template string, args ...interface{}) {
+	logger.Warnf(template, args...)
+}
+
+func (logger zLogger) CUserWarnw(ctx context.Context, msg string, keysAndValues ...interface{}) {
 	logger.Warnw(msg, keysAndValues...)
 }
 

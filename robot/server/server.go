@@ -461,8 +461,8 @@ func (s *Server) Log(ctx context.Context, req *pb.LogRequest) (*pb.LogResponse, 
 	entry := logging.LogEntry{
 		Entry:  zEntry,
 		Fields: fields,
-		// Module logs are always non-diagnostic.
-		NonDiagnostic: true,
+		// Module logs are always user-facing.
+		UserFacing: true,
 	}
 
 	s.robot.Logger().Write(&entry)

@@ -48,12 +48,12 @@ type (
 	}
 
 	// LogEntry embeds a zapcore Entry, a slice of Fields, and whether the entry is
-	// non-diagnostic.
+	// user-facing.
 	LogEntry struct {
 		zapcore.Entry
 		// Fields are the key-value fields of the entry.
-		Fields        []zapcore.Field
-		NonDiagnostic bool
+		Fields     []zapcore.Field
+		UserFacing bool
 	}
 
 	implWith struct {
@@ -280,10 +280,10 @@ func (imp *impl) Write(entry *LogEntry) {
 
 					imp.testHelper()
 					for _, appender := range imp.appenders {
-						// Use regular appender.Write unless the entry is _not_ non-diagnostic and
+						// Use regular appender.Write unless the entry is _not_ user-facing and
 						// appender is a net appender. In that case, use WriteDiagnostic method.
 						awm := appender.Write
-						if !entry.NonDiagnostic {
+						if !entry.UserFacing {
 							if na, ok := appender.(*NetAppender); ok {
 								awm = na.WriteDiagnostic
 							}
@@ -317,10 +317,10 @@ func (imp *impl) Write(entry *LogEntry) {
 
 	imp.testHelper()
 	for _, appender := range imp.appenders {
-		// Use regular appender.Write unless the entry is _not_ non-diagnostic and
-		// appender is a net appender. In that case, use WriteDiagnostic method.
+		// Use regular appender.Write unless the entry is _not_ user-facing and appender is a
+		// net appender. In that case, use WriteDiagnostic method.
 		awm := appender.Write
-		if !entry.NonDiagnostic {
+		if !entry.UserFacing {
 			if na, ok := appender.(*NetAppender); ok {
 				awm = na.WriteDiagnostic
 			}
@@ -334,7 +334,7 @@ func (imp *impl) Write(entry *LogEntry) {
 }
 
 // Constructs the log message by forwarding to `fmt.Sprint`. `traceKey` may be the empty string.
-func (imp *impl) format(logLevel Level, traceKey string, nonDiagnostic bool, args ...interface{}) *LogEntry {
+func (imp *impl) format(logLevel Level, traceKey string, userFacing bool, args ...interface{}) *LogEntry {
 	logEntry := imp.NewLogEntry()
 	logEntry.Level = logLevel.AsZap()
 	// Use `Sprintln` to put spaces between `args`. E.g:
@@ -357,13 +357,13 @@ func (imp *impl) format(logLevel Level, traceKey string, nonDiagnostic bool, arg
 		logEntry.Fields = append(logEntry.Fields, zap.String("traceKey", traceKey))
 	}
 
-	logEntry.NonDiagnostic = nonDiagnostic
+	logEntry.UserFacing = userFacing
 
 	return logEntry
 }
 
 // Constructs the log message by forwarding to `fmt.Sprintf`. `traceKey` may be the empty string.
-func (imp *impl) formatf(logLevel Level, traceKey, template string, nonDiagnostic bool, args ...interface{}) *LogEntry {
+func (imp *impl) formatf(logLevel Level, traceKey, template string, userFacing bool, args ...interface{}) *LogEntry {
 	logEntry := imp.NewLogEntry()
 	logEntry.Level = logLevel.AsZap()
 	logEntry.Message = fmt.Sprintf(template, args...)
@@ -372,7 +372,7 @@ func (imp *impl) formatf(logLevel Level, traceKey, template string, nonDiagnosti
 		logEntry.Fields = append(logEntry.Fields, zap.String("traceKey", traceKey))
 	}
 
-	logEntry.NonDiagnostic = nonDiagnostic
+	logEntry.UserFacing = userFacing
 
 	return logEntry
 }
@@ -381,7 +381,7 @@ func (imp *impl) formatf(logLevel Level, traceKey, template string, nonDiagnosti
 // counterpart is the value. The keys are expected to be strings. The values are json
 // serialized. Only public fields are included in the serialization. `traceKey` may be the empty
 // string.
-func (imp *impl) formatw(logLevel Level, traceKey, msg string, nonDiagnostic bool, keysAndValues ...interface{}) *LogEntry {
+func (imp *impl) formatw(logLevel Level, traceKey, msg string, userFacing bool, keysAndValues ...interface{}) *LogEntry {
 	logEntry := imp.NewLogEntry()
 	logEntry.Level = logLevel.AsZap()
 	logEntry.Message = msg
@@ -409,7 +409,7 @@ func (imp *impl) formatw(logLevel Level, traceKey, msg string, nonDiagnostic boo
 		}
 	}
 
-	logEntry.NonDiagnostic = nonDiagnostic
+	logEntry.UserFacing = userFacing
 
 	return logEntry
 }
@@ -465,10 +465,10 @@ func (imp *impl) CDebugw(ctx context.Context, msg string, keysAndValues ...inter
 	}
 }
 
-func (imp *impl) info(nonDiagnostic bool, args ...interface{}) {
+func (imp *impl) info(userFacing bool, args ...interface{}) {
 	imp.testHelper()
 	if imp.shouldLog(INFO) {
-		imp.Write(imp.format(INFO, emptyTraceKey, nonDiagnostic, args...))
+		imp.Write(imp.format(INFO, emptyTraceKey, userFacing, args...))
 	}
 }
 
@@ -476,17 +476,17 @@ func (imp *impl) Info(args ...interface{}) {
 	imp.info(false, args...)
 }
 
-func (imp *impl) NonDiagnostic(args ...interface{}) {
+func (imp *impl) UserInfo(args ...interface{}) {
 	imp.info(true, args...)
 }
 
-func (imp *impl) cinfo(ctx context.Context, nonDiagnostic bool, args ...interface{}) {
+func (imp *impl) cinfo(ctx context.Context, userFacing bool, args ...interface{}) {
 	imp.testHelper()
 	dbgName := GetName(ctx)
 
 	// We log if the logger is configured for info, or if there's a trace key.
 	if imp.shouldLog(INFO) || dbgName != emptyTraceKey {
-		imp.Write(imp.format(INFO, dbgName, nonDiagnostic, args...))
+		imp.Write(imp.format(INFO, dbgName, userFacing, args...))
 	}
 }
 
@@ -494,14 +494,14 @@ func (imp *impl) CInfo(ctx context.Context, args ...interface{}) {
 	imp.cinfo(ctx, false, args...)
 }
 
-func (imp *impl) CNonDiagnostic(ctx context.Context, args ...interface{}) {
+func (imp *impl) CUserInfo(ctx context.Context, args ...interface{}) {
 	imp.cinfo(ctx, true, args...)
 }
 
-func (imp *impl) infof(template string, nonDiagnostic bool, args ...interface{}) {
+func (imp *impl) infof(template string, userFacing bool, args ...interface{}) {
 	imp.testHelper()
 	if imp.shouldLog(INFO) {
-		imp.Write(imp.formatf(INFO, emptyTraceKey, template, nonDiagnostic, args...))
+		imp.Write(imp.formatf(INFO, emptyTraceKey, template, userFacing, args...))
 	}
 }
 
@@ -509,17 +509,17 @@ func (imp *impl) Infof(template string, args ...interface{}) {
 	imp.infof(template, false, args...)
 }
 
-func (imp *impl) NonDiagnosticf(template string, args ...interface{}) {
+func (imp *impl) UserInfof(template string, args ...interface{}) {
 	imp.infof(template, true, args...)
 }
 
-func (imp *impl) cinfof(ctx context.Context, template string, nonDiagnostic bool, args ...interface{}) {
+func (imp *impl) cinfof(ctx context.Context, template string, userFacing bool, args ...interface{}) {
 	imp.testHelper()
 	dbgName := GetName(ctx)
 
 	// We log if the logger is configured for info, or if there's a trace key.
 	if imp.shouldLog(INFO) || dbgName != emptyTraceKey {
-		imp.Write(imp.formatf(INFO, dbgName, template, nonDiagnostic, args...))
+		imp.Write(imp.formatf(INFO, dbgName, template, userFacing, args...))
 	}
 }
 
@@ -527,14 +527,14 @@ func (imp *impl) CInfof(ctx context.Context, template string, args ...interface{
 	imp.cinfof(ctx, template, false, args...)
 }
 
-func (imp *impl) CNonDiagnosticf(ctx context.Context, template string, args ...interface{}) {
+func (imp *impl) CUserInfof(ctx context.Context, template string, args ...interface{}) {
 	imp.cinfof(ctx, template, true, args...)
 }
 
-func (imp *impl) infow(msg string, nonDiagnostic bool, keysAndValues ...interface{}) {
+func (imp *impl) infow(msg string, userFacing bool, keysAndValues ...interface{}) {
 	imp.testHelper()
 	if imp.shouldLog(INFO) {
-		imp.Write(imp.formatw(INFO, emptyTraceKey, msg, nonDiagnostic, keysAndValues...))
+		imp.Write(imp.formatw(INFO, emptyTraceKey, msg, userFacing, keysAndValues...))
 	}
 }
 
@@ -542,17 +542,17 @@ func (imp *impl) Infow(msg string, keysAndValues ...interface{}) {
 	imp.infow(msg, false, keysAndValues...)
 }
 
-func (imp *impl) NonDiagnosticw(msg string, keysAndValues ...interface{}) {
+func (imp *impl) UserInfow(msg string, keysAndValues ...interface{}) {
 	imp.infow(msg, true, keysAndValues...)
 }
 
-func (imp *impl) cinfow(ctx context.Context, msg string, nonDiagnostic bool, keysAndValues ...interface{}) {
+func (imp *impl) cinfow(ctx context.Context, msg string, userFacing bool, keysAndValues ...interface{}) {
 	imp.testHelper()
 	dbgName := GetName(ctx)
 
 	// We log if the logger is configured for info, or if there's a trace key.
 	if imp.shouldLog(INFO) || dbgName != emptyTraceKey {
-		imp.Write(imp.formatw(INFO, dbgName, msg, nonDiagnostic, keysAndValues...))
+		imp.Write(imp.formatw(INFO, dbgName, msg, userFacing, keysAndValues...))
 	}
 }
 
@@ -560,7 +560,7 @@ func (imp *impl) CInfow(ctx context.Context, msg string, keysAndValues ...interf
 	imp.cinfow(ctx, msg, false, keysAndValues...)
 }
 
-func (imp *impl) CNonDiagnosticw(ctx context.Context, msg string, keysAndValues ...interface{}) {
+func (imp *impl) CUserInfow(ctx context.Context, msg string, keysAndValues ...interface{}) {
 	imp.cinfow(ctx, msg, true, keysAndValues...)
 }
 
@@ -771,10 +771,10 @@ func (imp *implWith) CDebugw(ctx context.Context, msg string, keysAndValues ...i
 	}
 }
 
-func (imp *implWith) info(nonDiagnostic bool, args ...interface{}) {
+func (imp *implWith) info(userFacing bool, args ...interface{}) {
 	imp.testHelper()
 	if imp.shouldLog(INFO) {
-		entry := imp.format(INFO, emptyTraceKey, nonDiagnostic, args...)
+		entry := imp.format(INFO, emptyTraceKey, userFacing, args...)
 		entry.Fields = append(entry.Fields, imp.logFields...)
 		imp.Write(entry)
 	}
@@ -784,17 +784,17 @@ func (imp *implWith) Info(args ...interface{}) {
 	imp.info(false, args...)
 }
 
-func (imp *implWith) NonDiagnostic(args ...interface{}) {
+func (imp *implWith) UserInfo(args ...interface{}) {
 	imp.info(true, args...)
 }
 
-func (imp *implWith) cinfo(ctx context.Context, nonDiagnostic bool, args ...interface{}) {
+func (imp *implWith) cinfo(ctx context.Context, userFacing bool, args ...interface{}) {
 	imp.testHelper()
 	dbgName := GetName(ctx)
 
 	// We log if the logger is configured for debug, or if there's a trace key.
 	if imp.shouldLog(INFO) || dbgName != emptyTraceKey {
-		entry := imp.format(INFO, dbgName, nonDiagnostic, args...)
+		entry := imp.format(INFO, dbgName, userFacing, args...)
 		entry.Fields = append(entry.Fields, imp.logFields...)
 		imp.Write(entry)
 	}
@@ -804,14 +804,14 @@ func (imp *implWith) CInfo(ctx context.Context, args ...interface{}) {
 	imp.cinfo(ctx, false, args...)
 }
 
-func (imp *implWith) CNonDiagnostic(ctx context.Context, args ...interface{}) {
+func (imp *implWith) CUserInfo(ctx context.Context, args ...interface{}) {
 	imp.cinfo(ctx, true, args...)
 }
 
-func (imp *implWith) infof(template string, nonDiagnostic bool, args ...interface{}) {
+func (imp *implWith) infof(template string, userFacing bool, args ...interface{}) {
 	imp.testHelper()
 	if imp.shouldLog(INFO) {
-		entry := imp.formatf(INFO, emptyTraceKey, template, nonDiagnostic, args...)
+		entry := imp.formatf(INFO, emptyTraceKey, template, userFacing, args...)
 		entry.Fields = append(entry.Fields, imp.logFields...)
 		imp.Write(entry)
 	}
@@ -821,17 +821,17 @@ func (imp *implWith) Infof(template string, args ...interface{}) {
 	imp.infof(template, false, args...)
 }
 
-func (imp *implWith) NonDiagnosticf(template string, args ...interface{}) {
+func (imp *implWith) UserInfof(template string, args ...interface{}) {
 	imp.infof(template, false, args...)
 }
 
-func (imp *implWith) cinfof(ctx context.Context, template string, nonDiagnostic bool, args ...interface{}) {
+func (imp *implWith) cinfof(ctx context.Context, template string, userFacing bool, args ...interface{}) {
 	imp.testHelper()
 	dbgName := GetName(ctx)
 
 	// We log if the logger is configured for debug, or if there's a trace key.
 	if imp.shouldLog(INFO) || dbgName != emptyTraceKey {
-		entry := imp.formatf(INFO, dbgName, template, nonDiagnostic, args...)
+		entry := imp.formatf(INFO, dbgName, template, userFacing, args...)
 		entry.Fields = append(entry.Fields, imp.logFields...)
 		imp.Write(entry)
 	}
@@ -845,10 +845,10 @@ func (imp *implWith) CDiagnosticf(ctx context.Context, template string, args ...
 	imp.cinfof(ctx, template, true, args...)
 }
 
-func (imp *implWith) infow(msg string, nonDiagnostic bool, keysAndValues ...interface{}) {
+func (imp *implWith) infow(msg string, userFacing bool, keysAndValues ...interface{}) {
 	imp.testHelper()
 	if imp.shouldLog(INFO) {
-		entry := imp.formatw(INFO, emptyTraceKey, msg, nonDiagnostic, keysAndValues...)
+		entry := imp.formatw(INFO, emptyTraceKey, msg, userFacing, keysAndValues...)
 		entry.Fields = append(entry.Fields, imp.logFields...)
 		imp.Write(entry)
 	}
@@ -858,17 +858,17 @@ func (imp *implWith) Infow(msg string, keysAndValues ...interface{}) {
 	imp.infow(msg, false, keysAndValues...)
 }
 
-func (imp *implWith) NonDiagnosticw(msg string, keysAndValues ...interface{}) {
+func (imp *implWith) UserInfow(msg string, keysAndValues ...interface{}) {
 	imp.infow(msg, true, keysAndValues...)
 }
 
-func (imp *implWith) cinfow(ctx context.Context, msg string, nonDiagnostic bool, keysAndValues ...interface{}) {
+func (imp *implWith) cinfow(ctx context.Context, msg string, userFacing bool, keysAndValues ...interface{}) {
 	imp.testHelper()
 	dbgName := GetName(ctx)
 
 	// We log if the logger is configured for debug, or if there's a trace key.
 	if imp.shouldLog(INFO) || dbgName != emptyTraceKey {
-		entry := imp.formatw(INFO, dbgName, msg, nonDiagnostic, keysAndValues...)
+		entry := imp.formatw(INFO, dbgName, msg, userFacing, keysAndValues...)
 		entry.Fields = append(entry.Fields, imp.logFields...)
 		imp.Write(entry)
 	}
@@ -878,7 +878,7 @@ func (imp *implWith) CInfow(ctx context.Context, msg string, keysAndValues ...in
 	imp.cinfow(ctx, msg, false, keysAndValues...)
 }
 
-func (imp *implWith) CNonDiagnosticw(ctx context.Context, msg string, keysAndValues ...interface{}) {
+func (imp *implWith) CUserInfow(ctx context.Context, msg string, keysAndValues ...interface{}) {
 	imp.cinfow(ctx, msg, true, keysAndValues...)
 }
 

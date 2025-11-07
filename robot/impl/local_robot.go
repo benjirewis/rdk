@@ -1335,7 +1335,13 @@ func (r *localRobot) applyLocalModuleVersions(cfg *config.Config) {
 }
 
 func (r *localRobot) reconfigure(ctx context.Context, newConfig *config.Config, forceSync bool) {
-	r.logger.NonDiagnostic("BENJI WOW a NON-DIAGNOSTIC log!")
+	r.logger.Debug("Debug log")                // diagnostic
+	r.logger.Info("Info log")                  // diagnostic
+	r.logger.UserInfo("User-facing info log!") // info-level but user-facing
+	r.logger.Warn("Warn log")                  // diagnostic
+	r.logger.UserWarn("Use-facing warn log!")  // warn-level but user-facing
+	r.logger.Error("Error log")                // user-facing
+	// r.logger.Fatal("Fatal log")                // user-facing
 
 	defer func() {
 		// Always update the `initializing` value at the end of this function. Resources may
