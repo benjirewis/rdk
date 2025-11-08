@@ -47,11 +47,13 @@ type (
 		recentMessageWindowStart time.Time
 	}
 
-	// LogEntry embeds a zapcore Entry and slice of Fields.
+	// LogEntry embeds a zapcore Entry, a slice of Fields, and whether the entry is from a
+	// module (all logs from modules are user-facing).
 	LogEntry struct {
 		zapcore.Entry
 		// Fields are the key-value fields of the entry.
-		Fields []zapcore.Field
+		Fields     []zapcore.Field
+		FromModule bool
 	}
 
 	implWith struct {
@@ -278,7 +280,17 @@ func (imp *impl) Write(entry *LogEntry) {
 
 					imp.testHelper()
 					for _, appender := range imp.appenders {
-						err := appender.Write(collapsedEntry.Entry, collapsedEntry.Fields)
+						// Use regular appender.Write unless the entry is from a module and appender
+						// is a net appender. In that case, use WriteFromModule method to make sure
+						// the logs are user-facing.
+						awm := appender.Write
+						if entry.FromModule {
+							if na, ok := appender.(*NetAppender); ok {
+								awm = na.WriteFromModule
+							}
+						}
+
+						err := awm(collapsedEntry.Entry, collapsedEntry.Fields)
 						if err != nil {
 							fmt.Fprint(os.Stderr, err)
 						}
@@ -306,7 +318,17 @@ func (imp *impl) Write(entry *LogEntry) {
 
 	imp.testHelper()
 	for _, appender := range imp.appenders {
-		err := appender.Write(entry.Entry, entry.Fields)
+		// Use regular appender.Write unless the entry is from a module and appender
+		// is a net appender. In that case, use WriteFromModule method to make sure
+		// the logs are user-facing.
+		awm := appender.Write
+		if entry.FromModule {
+			if na, ok := appender.(*NetAppender); ok {
+				awm = na.WriteFromModule
+			}
+		}
+
+		err := awm(entry.Entry, entry.Fields)
 		if err != nil {
 			fmt.Fprint(os.Stderr, err)
 		}

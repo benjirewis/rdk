@@ -212,7 +212,28 @@ func newInternalLogEntry(level zapcore.Level, message string) zapcore.Entry {
 	}
 }
 
+// WriteFromModule adds a log from a module to the net appender queue. All logs from
+// modules are user-facing.
+func (nl *NetAppender) WriteFromModule(e zapcore.Entry, f []zapcore.Field) error {
+	return nl.write(e, f, true)
+}
+
 func (nl *NetAppender) Write(e zapcore.Entry, f []zapcore.Field) error {
+	return nl.write(e, f, false)
+}
+
+var userFacingLoggerNames = map[string]struct{}{"rdk.modmanager": {}}
+
+func isUserFacingLog(fromModule bool, level zapcore.Level, loggerName string) bool {
+	if fromModule || level.Enabled(zapcore.ErrorLevel) {
+		return true
+	}
+
+	_, userFacingLoggerName := userFacingLoggerNames[loggerName]
+	return userFacingLoggerName
+}
+
+func (nl *NetAppender) write(e zapcore.Entry, f []zapcore.Field, fromModule bool) error {
 	log := &commonpb.LogEntry{
 		Host:       nl.hostname,
 		Level:      e.Level.String(),
@@ -220,6 +241,7 @@ func (nl *NetAppender) Write(e zapcore.Entry, f []zapcore.Field) error {
 		LoggerName: e.LoggerName,
 		Message:    e.Message,
 		Stack:      e.Stack,
+		UserFacing: isUserFacingLog(fromModule, e.Level, e.LoggerName),
 	}
 
 	wc := wrappedEntryCaller{

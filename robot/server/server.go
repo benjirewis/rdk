@@ -460,8 +460,9 @@ func (s *Server) Log(ctx context.Context, req *pb.LogRequest) (*pb.LogResponse, 
 	}
 	fields = append(fields, tsField)
 	entry := logging.LogEntry{
-		Entry:  zEntry,
-		Fields: fields,
+		Entry:      zEntry,
+		Fields:     fields,
+		FromModule: true,
 	}
 
 	s.robot.Logger().Write(&entry)
