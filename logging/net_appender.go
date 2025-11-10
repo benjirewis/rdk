@@ -222,10 +222,14 @@ func (nl *NetAppender) Write(e zapcore.Entry, f []zapcore.Field) error {
 	return nl.write(e, f, false)
 }
 
-var userFacingLoggerNames = map[string]struct{}{"rdk.modmanager": {}}
+var userFacingLoggerNames = map[string]struct{}{
+	"rdk.startup":  {},
+	"rdk.shutdown": {},
+	"rdk.modules":  {},
+}
 
 func isUserFacingLog(fromModule bool, level zapcore.Level, loggerName string) bool {
-	if fromModule || level.Enabled(zapcore.ErrorLevel) {
+	if fromModule || zapcore.ErrorLevel.Enabled(level) {
 		return true
 	}
 

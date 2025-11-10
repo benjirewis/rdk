@@ -53,6 +53,7 @@ func NewManager(
 	restartCtx, restartCtxCancel := context.WithCancel(ctx)
 	ret := &Manager{
 		logger:                  logger.Sublogger("modmanager"),
+		userFacingLogger:        logger.Sublogger("modules"),
 		modules:                 moduleMap{},
 		parentAddrs:             parentAddrs,
 		rMap:                    resourceModuleMap{},
@@ -129,11 +130,12 @@ type Manager struct {
 	// `Reconfigure`ing modules, `Remove`ing modules and `Close`ing the `Manager`.
 	mu sync.RWMutex
 
-	logger       logging.Logger
-	modules      moduleMap
-	parentAddrs  config.ParentSockAddrs
-	rMap         resourceModuleMap
-	untrustedEnv bool
+	logger           logging.Logger
+	userFacingLogger logging.Logger
+	modules          moduleMap
+	parentAddrs      config.ParentSockAddrs
+	rMap             resourceModuleMap
+	untrustedEnv     bool
 	// viamHomeDir is the absolute path to the viam home directory. Ex: /home/walle/.viam
 	// `viamHomeDir` may only be the empty string in testing
 	viamHomeDir string
@@ -266,7 +268,7 @@ func (mgr *Manager) Add(ctx context.Context, confs ...config.Module) error {
 			defer wg.Done()
 			moduleLogger := mgr.logger.Sublogger(conf.Name)
 
-			moduleLogger.CInfow(ctx, "Now adding module", "module", conf.Name)
+			mgr.userFacingLogger.CInfow(ctx, "Now adding module", "module", conf.Name)
 			err := mgr.add(ctx, conf, moduleLogger)
 			if err != nil {
 				moduleLogger.CErrorw(ctx, "Error adding module", "module", conf.Name, "error", err)
@@ -283,7 +285,7 @@ func (mgr *Manager) Add(ctx context.Context, confs ...config.Module) error {
 		for modName := range seen {
 			addedModNames = append(addedModNames, modName)
 		}
-		mgr.logger.CInfow(ctx, "Modules successfully added", "modules", addedModNames)
+		mgr.userFacingLogger.CInfow(ctx, "Modules successfully added", "modules", addedModNames)
 	}
 	return combinedErr
 }
@@ -415,7 +417,7 @@ func (mgr *Manager) Reconfigure(ctx context.Context, conf config.Module) ([]reso
 		handledResourceNameStrings = append(handledResourceNameStrings, name.String())
 	}
 
-	mod.logger.CInfow(ctx, "Module configuration changed. Stopping the existing module process", "module", conf.Name)
+	mgr.userFacingLogger.CInfow(ctx, "Now reconfiguring module", "module", conf.Name)
 
 	if err := mgr.closeModule(mod, true); err != nil {
 		// If removal fails, assume all handled resources are orphaned.
@@ -437,6 +439,8 @@ func (mgr *Manager) Reconfigure(ctx context.Context, conf config.Module) ([]reso
 
 	mod.logger.CInfow(ctx, "Resources handled by reconfigured module will be re-added to new module process",
 		"module", mod.cfg.Name, "resources", handledResourceNameStrings)
+
+	mgr.userFacingLogger.CInfow(ctx, "Module successfully reconfigured", "module", conf.Name)
 	return handledResourceNames, nil
 }
 
@@ -478,6 +482,8 @@ func (mgr *Manager) Remove(modName string) ([]resource.Name, error) {
 // closeModule attempts to cleanly shut down the module process. It does not wait on module recovery processes,
 // as they are running outside code and may have unexpected behavior.
 func (mgr *Manager) closeModule(mod *module, reconfigure bool) error {
+	mgr.userFacingLogger.Infow("Now closing module", "module", mod.cfg.Name)
+
 	// resource manager should've removed these cleanly if this isn't a reconfigure
 	if !reconfigure && len(mod.resources) != 0 {
 		mod.logger.Warnw("Forcing removal of module with active resources", "module", mod.cfg.Name)
@@ -521,7 +527,7 @@ func (mgr *Manager) closeModule(mod *module, reconfigure bool) error {
 	}
 	mgr.modules.Delete(mod.cfg.Name)
 
-	mod.logger.Infow("Module successfully closed", "module", mod.cfg.Name)
+	mgr.userFacingLogger.Infow("Module successfully closed", "module", mod.cfg.Name)
 	return nil
 }
 

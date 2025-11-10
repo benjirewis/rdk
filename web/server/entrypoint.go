@@ -108,8 +108,9 @@ func logVersion(logger logging.Logger) {
 }
 
 func logStartupInfo(logger logging.Logger) {
-	logVersion(logger)
-	logViamEnvVariables(logger)
+	startupLogger := logger.Sublogger("startup")
+	logVersion(startupLogger)
+	logViamEnvVariables(startupLogger)
 }
 
 // RunServer is an entry point to starting the web server that can be called by main in a code
