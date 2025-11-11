@@ -60,6 +60,7 @@ type localRobot struct {
 	localPackages           packages.ManagerSyncer
 	cloudConnSvc            icloud.ConnectionService
 	logger                  logging.Logger
+	reconfigureLogger       logging.Logger
 	activeBackgroundWorkers sync.WaitGroup
 
 	// reconfigurationLock manages access to the resource graph and nodes. If either may change, this lock should be taken.
@@ -427,6 +428,7 @@ func newWithResources(
 		),
 		operations:              operation.NewManager(logger),
 		logger:                  logger,
+		reconfigureLogger:       logger.Sublogger("reconfigure"),
 		closeContext:            closeCtx,
 		cancelBackgroundWorkers: cancel,
 		// triggerConfig buffers 1 message so that we can queue up to 1 reconfiguration attempt
@@ -1341,6 +1343,8 @@ func (r *localRobot) applyLocalModuleVersions(cfg *config.Config) {
 }
 
 func (r *localRobot) reconfigure(ctx context.Context, newConfig *config.Config, forceSync bool) {
+	r.logger.Error("Here's an error from internal rdk code! All error logs are user-facing")
+
 	defer func() {
 		// Always update the `initializing` value at the end of this function. Resources may
 		// be equal or `reconfigure` may otherwise return early, but we still want to move
@@ -1510,7 +1514,7 @@ func (r *localRobot) reconfigure(ctx context.Context, newConfig *config.Config, 
 		return
 	}
 
-	r.logger.CInfo(ctx, "(Re)configuring robot")
+	r.reconfigureLogger.CInfo(ctx, "(Re)configuring robot")
 
 	if r.revealSensitiveConfigDiffs {
 		r.logger.CDebugf(ctx, "(re)configuring with %+v", diff)
@@ -1566,7 +1570,7 @@ func (r *localRobot) reconfigure(ctx context.Context, newConfig *config.Config, 
 	if allErrs != nil {
 		r.logger.CErrorw(ctx, "The following errors were gathered during reconfiguration", "errors", allErrs)
 	} else {
-		r.logger.CInfow(ctx, "Robot (re)configured")
+		r.reconfigureLogger.CInfow(ctx, "Robot (re)configured")
 	}
 }
 

@@ -34,7 +34,7 @@ func newCounter(ctx context.Context,
 	conf resource.Config,
 	logger logging.Logger,
 ) (resource.Resource, error) {
-	logger.Info("BENJI-DBG Invoking the newCounter constructor function")
+	logger.Info("Here's a log from the module! All module logs are user-facing")
 	return &counter{
 		Named: conf.ResourceName().AsNamed(),
 	}, nil

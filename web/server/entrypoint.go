@@ -109,6 +109,7 @@ func logVersion(logger logging.Logger) {
 
 func logStartupInfo(logger logging.Logger) {
 	startupLogger := logger.Sublogger("startup")
+	startupLogger.Info("Here's a startup log from internal rdk code! Sublogger names like 'startup' can be made user-facing")
 	logVersion(startupLogger)
 	logViamEnvVariables(startupLogger)
 }
